@@ -12,6 +12,10 @@ const int HEIGHT = 20;
 int score = 0;
 int applesEaten = 0;
 int bombsHit = 0;
+int score2 = 0;
+int applesEaten2 = 0;
+int bombsHit2 = 0;
+int loser = 0; // 1 = Player 1, 2 = Player 2, 3 = Both (Draw)
 bool gameOver = false;
 
 struct Point
@@ -59,6 +63,7 @@ class Game
 {
 public:
     Snake snake;
+    Snake snake2;
     vector<Point> fruits, rocks, bombs;
 
     string HEAD = "🐍", BODY = "🟩", FRUIT = "🍎", ROCK = "🪨", BOMB = "💣", WALL = "🟥", EMPTY = "  ";
@@ -67,6 +72,16 @@ public:
     {
         SetConsoleOutputCP(65001);
         srand(time(0));
+
+        // Start Player 1 on the left side, moving right
+        snake.body[0] = {WIDTH / 3, HEIGHT / 2};
+        snake.dir = 'R';
+
+        // Start Player 2 on the right side, moving left
+        snake2.body.clear();
+        snake2.body.push_back({2 * WIDTH / 3, HEIGHT / 2});
+        snake2.dir = 'L';
+
         spawn(fruits, 6);
         spawn(rocks, 3);
         spawn(bombs, 3);
@@ -75,6 +90,7 @@ public:
     bool occupied(Point p)
     {
         return find(snake.body.begin(), snake.body.end(), p) != snake.body.end() ||
+               find(snake2.body.begin(), snake2.body.end(), p) != snake2.body.end() ||
                find(fruits.begin(), fruits.end(), p) != fruits.end() ||
                find(rocks.begin(), rocks.end(), p) != rocks.end() ||
                find(bombs.begin(), bombs.end(), p) != bombs.end();
@@ -97,7 +113,7 @@ public:
         COORD c = {0, 0};
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), c);
 
-        cout << "Score: " << score << "\n";
+        cout << "Player 1 Score: " << score << "   |   Player 2 Score: " << score2 << "       \n";
 
         for (int y = 0; y < HEIGHT; y++)
         {
@@ -110,12 +126,13 @@ public:
                     cout << WALL;
                     continue;
                 }
-                if (p == snake.body[0])
+                if (p == snake.body[0] || p == snake2.body[0])
                 {
                     cout << HEAD;
                     continue;
                 }
-                if (find(snake.body.begin() + 1, snake.body.end(), p) != snake.body.end())
+                if (find(snake.body.begin() + 1, snake.body.end(), p) != snake.body.end() ||
+                    find(snake2.body.begin() + 1, snake2.body.end(), p) != snake2.body.end())
                 {
                     cout << BODY;
                     continue;
@@ -148,37 +165,62 @@ public:
             char k = toupper(_getch());
             if (k == 'X')
                 gameOver = true;
-            if (k == 'W' && snake.dir != 'D')
-                snake.dir = 'U';
-            if (k == 'S' && snake.dir != 'U')
-                snake.dir = 'D';
-            if (k == 'A' && snake.dir != 'R')
-                snake.dir = 'L';
-            if (k == 'D' && snake.dir != 'L')
-                snake.dir = 'R';
+            if (k == 'W')
+            {
+                if (snake.dir != 'D') snake.dir = 'U';
+                if (snake2.dir != 'D') snake2.dir = 'U';
+            }
+            if (k == 'S')
+            {
+                if (snake.dir != 'U') snake.dir = 'D';
+                if (snake2.dir != 'U') snake2.dir = 'D';
+            }
+            if (k == 'A')
+            {
+                if (snake.dir != 'R') snake.dir = 'L';
+                if (snake2.dir != 'R') snake2.dir = 'L';
+            }
+            if (k == 'D')
+            {
+                if (snake.dir != 'L') snake.dir = 'R';
+                if (snake2.dir != 'L') snake2.dir = 'R';
+            }
         }
     }
 
     void logic()
     {
         snake.move();
-        Point head = snake.body[0];
+        snake2.move();
+        Point head1 = snake.body[0];
+        Point head2 = snake2.body[0];
 
-        if (snake.hitSelf() || snake.hitWall())
+        bool snake1Dead = snake.hitWall() || snake.hitSelf() || (find(snake2.body.begin(), snake2.body.end(), head1) != snake2.body.end());
+        bool snake2Dead = snake2.hitWall() || snake2.hitSelf() || (find(snake.body.begin(), snake.body.end(), head2) != snake.body.end());
+
+        bool snake1HitRock = (find(rocks.begin(), rocks.end(), head1) != rocks.end());
+        bool snake2HitRock = (find(rocks.begin(), rocks.end(), head2) != rocks.end());
+
+        if (snake1Dead || snake1HitRock)
         {
             gameOver = true;
-            return;
+            loser = 1;
         }
-
-        if (find(rocks.begin(), rocks.end(), head) != rocks.end())
+        if (snake2Dead || snake2HitRock)
         {
             gameOver = true;
-            return;
+            if (loser == 1)
+                loser = 3;
+            else
+                loser = 2;
         }
 
-        // BOMB HIT SHRINK WORKS NOW ✅
-        auto b = find(bombs.begin(), bombs.end(), head);
-        if (b != bombs.end())
+        if (gameOver)
+            return;
+
+        // Player 1 Bomb collision
+        auto b1 = find(bombs.begin(), bombs.end(), head1);
+        if (b1 != bombs.end())
         {
             bombsHit++;
             score -= 20;
@@ -186,19 +228,47 @@ public:
                 score = 0;
 
             if (snake.body.size() > 1)
-                snake.body.pop_back(); // shrink
+                snake.body.pop_back();
 
-            bombs.erase(b);
+            bombs.erase(b1);
             spawn(bombs, 1);
         }
 
-        auto f = find(fruits.begin(), fruits.end(), head);
-        if (f != fruits.end())
+        // Player 2 Bomb collision
+        auto b2 = find(bombs.begin(), bombs.end(), head2);
+        if (b2 != bombs.end())
+        {
+            bombsHit2++;
+            score2 -= 20;
+            if (score2 < 0)
+                score2 = 0;
+
+            if (snake2.body.size() > 1)
+                snake2.body.pop_back();
+
+            bombs.erase(b2);
+            spawn(bombs, 1);
+        }
+
+        // Player 1 Fruit collision
+        auto f1 = find(fruits.begin(), fruits.end(), head1);
+        if (f1 != fruits.end())
         {
             applesEaten++;
             score += 10;
             snake.grow();
-            fruits.erase(f);
+            fruits.erase(f1);
+            spawn(fruits, 1);
+        }
+
+        // Player 2 Fruit collision
+        auto f2 = find(fruits.begin(), fruits.end(), head2);
+        if (f2 != fruits.end())
+        {
+            applesEaten2++;
+            score2 += 10;
+            snake2.grow();
+            fruits.erase(f2);
             spawn(fruits, 1);
         }
     }
@@ -215,9 +285,21 @@ public:
 
         system("cls");
         cout << "\n\n   💀 GAME OVER 💀\n\n";
+        if (loser == 3)
+            cout << "   🤝 DRAW! Both players lost! 🤝\n\n";
+        else
+            cout << "   ❌ Player " << loser << " Lost! ❌\n\n";
+
+        cout << "--- Player 1 Stats ---\n";
         cout << "🍎 Apples Eaten : " << applesEaten << "\n";
         cout << "💣 Bombs Hit    : " << bombsHit << "\n";
         cout << "🏆 Final Score  : " << score << "\n\n";
+
+        cout << "--- Player 2 Stats ---\n";
+        cout << "🍎 Apples Eaten : " << applesEaten2 << "\n";
+        cout << "💣 Bombs Hit    : " << bombsHit2 << "\n";
+        cout << "🏆 Final Score  : " << score2 << "\n\n";
+
         cout << "Press any key to exit...";
         _getch();
     }
