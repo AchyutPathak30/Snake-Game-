@@ -55,16 +55,27 @@ public:
     bool hitWall() { return body[0].x <= 0 || body[0].x >= WIDTH - 1 || body[0].y <= 0 || body[0].y >= HEIGHT - 1; }
 };
 
+class InputSource
+{
+public:
+    virtual ~InputSource() = default;
+    virtual bool hasKey() { return _kbhit() != 0; }
+    virtual char getKey() { return toupper(_getch()); }
+};
+
 class Game
 {
 public:
     Snake snake;
     vector<Point> fruits, rocks, bombs;
+    InputSource defaultInput;
+    InputSource *inputSource;
 
     string HEAD = "🐍", BODY = "🟩", FRUIT = "🍎", ROCK = "🪨", BOMB = "💣", WALL = "🟥", EMPTY = "  ";
 
-    Game()
+    Game(InputSource *input = nullptr)
     {
+        inputSource = input ? input : &defaultInput;
         SetConsoleOutputCP(65001);
         srand(time(0));
         spawn(fruits, 6);
@@ -143,9 +154,9 @@ public:
 
     void input()
     {
-        if (_kbhit())
+        if (inputSource->hasKey())
         {
-            char k = toupper(_getch());
+            char k = inputSource->getKey();
             if (k == 'X')
                 gameOver = true;
             if (k == 'W' && snake.dir != 'D')
